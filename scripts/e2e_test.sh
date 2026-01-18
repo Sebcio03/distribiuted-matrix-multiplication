@@ -107,7 +107,47 @@ done
 
 echo ""
 echo "5. Waiting for MPIJob to complete (timeout: 600s)..."
-if ! kubectl wait --for=condition=complete mpijob/matrix-multiplication-mpijob --timeout=600s 2>&1; then
+echo "   (This may take a while. Logs will be shown periodically)"
+
+# Wait with periodic log updates
+LAUNCHER_POD=$(kubectl get pods -l role=launcher,app=distribiuted-matrix-multiplication -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+TIMEOUT=600
+ELAPSED=0
+INTERVAL=30
+
+while [ $ELAPSED -lt $TIMEOUT ]; do
+    # Check if MPIJob is complete
+    if kubectl wait --for=condition=complete mpijob/matrix-multiplication-mpijob --timeout=5s 2>&1 | grep -q "condition met"; then
+        echo "MPIJob completed successfully!"
+        break
+    fi
+    
+    # Check if MPIJob failed
+    if kubectl wait --for=condition=failed mpijob/matrix-multiplication-mpijob --timeout=5s 2>&1 | grep -q "condition met"; then
+        echo "MPIJob failed!"
+        break
+    fi
+    
+    # Show progress every INTERVAL seconds
+    if [ $((ELAPSED % INTERVAL)) -eq 0 ] && [ $ELAPSED -gt 0 ]; then
+        echo ""
+        echo "[$ELAPSED/$TIMEOUT seconds elapsed] Current status:"
+        kubectl get mpijob matrix-multiplication-mpijob -o jsonpath='{.status.conditions[-1].type}: {.status.conditions[-1].message}' 2>/dev/null || echo "Status: Running"
+        
+        if [ -n "$LAUNCHER_POD" ]; then
+            echo ""
+            echo "Recent launcher logs (last 10 lines):"
+            kubectl logs "$LAUNCHER_POD" --tail=10 2>&1 || echo "Could not get logs"
+        fi
+        echo ""
+    fi
+    
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+done
+
+# Final check
+if ! kubectl wait --for=condition=complete mpijob/matrix-multiplication-mpijob --timeout=5s 2>&1 | grep -q "condition met"; then
     echo ""
     echo "=== MPIJob TIMEOUT or FAILED ==="
     echo ""
