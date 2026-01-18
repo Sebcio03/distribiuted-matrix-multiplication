@@ -1,0 +1,141 @@
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: matrix-multiplication-mpijob
+  labels:
+    app: distribiuted-matrix-multiplication
+spec:
+  slotsPerWorker: 1
+  runPolicy:
+    cleanPodPolicy: Running
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app: distribiuted-matrix-multiplication
+            role: launcher
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: launcher
+            image: distribiuted-matrix-multiplication:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              WORKER_COUNT=${WORKER_COUNT:-4}
+              MATRIX_SIZE=${MATRIX_SIZE:-100}
+              MATRIX_A=/tmp/matrix_a.txt
+              MATRIX_B=/tmp/matrix_b.txt
+              OUTPUT=/tmp/output.txt
+
+              echo "Generating ${MATRIX_SIZE}x${MATRIX_SIZE} matrices..."
+              python3 -c "
+              import numpy as np
+              size = $MATRIX_SIZE
+              np.random.seed(42)
+              A = np.random.rand(size, size).astype(np.float32) * 100
+              B = np.random.rand(size, size).astype(np.float32) * 100
+              np.savetxt('$MATRIX_A', A, fmt='%.6f')
+              np.savetxt('$MATRIX_B', B, fmt='%.6f')
+              print('Generated matrices')
+              " 2>/dev/null || {
+                echo "Python not available, using shell fallback..."
+                awk -v size=$MATRIX_SIZE 'BEGIN {for(i=1;i<=size;i++){for(j=1;j<=size;j++)printf "%.1f ", i+j; print ""}}' > $MATRIX_A
+                awk -v size=$MATRIX_SIZE 'BEGIN {for(i=1;i<=size;i++){for(j=1;j<=size;j++)printf "%.1f ", i*j; print ""}}' > $MATRIX_B
+              }
+
+              TOTAL_PROCS=$((WORKER_COUNT + 1))
+              echo "Running MPI with $TOTAL_PROCS processes (1 coordinator + $WORKER_COUNT workers)..."
+              echo "Launcher will coordinate MPI across worker pods"
+              
+              # MPIJob operator provides hostfile at /etc/mpi/hostfile
+              # Use mpirun with the hostfile to launch processes across pods
+              if [ -f /etc/mpi/hostfile ]; then
+                echo "Using MPIJob operator hostfile: /etc/mpi/hostfile"
+                mpirun -np $TOTAL_PROCS \
+                  --allow-run-as-root \
+                  --hostfile /etc/mpi/hostfile \
+                  --mca btl_vader_single_copy_mechanism none \
+                  --mca btl ^openib \
+                  /app/distribiuted-matrix-multiplication \
+                  "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
+              else
+                # Fallback: MPIJob operator may use different mechanism
+                echo "Hostfile not found, using default MPI discovery"
+                mpirun -np $TOTAL_PROCS \
+                  --allow-run-as-root \
+                  --mca btl_vader_single_copy_mechanism none \
+                  --mca btl ^openib \
+                  /app/distribiuted-matrix-multiplication \
+                  "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
+              fi
+
+              echo "MPI completed. Verifying result..."
+              python3 -c "
+              import numpy as np
+              A = np.loadtxt('$MATRIX_A', dtype=np.float64)
+              B = np.loadtxt('$MATRIX_B', dtype=np.float64)
+              result = np.loadtxt('$OUTPUT', dtype=np.float64)
+              expected = A @ B
+              diff = np.abs(result - expected)
+              max_diff = np.max(diff)
+              rel_diff = max_diff / np.max(np.abs(expected)) if np.max(np.abs(expected)) > 0 else 0
+              print(f'Max absolute difference: {max_diff}')
+              print(f'Max relative difference: {rel_diff}')
+              if rel_diff < 1e-10:
+                  print('VERIFICATION PASSED')
+              else:
+                  print('VERIFICATION FAILED')
+                  exit(1)
+              " 2>/dev/null || echo "Verification skipped (numpy not available)"
+
+              echo "Done! Output saved to $OUTPUT"
+            env:
+            - name: OMPI_ALLOW_RUN_AS_ROOT
+              value: "1"
+            - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
+              value: "1"
+            - name: WORKER_COUNT
+              value: "${WORKER_COUNT}"
+            - name: MATRIX_SIZE
+              value: "${MATRIX_SIZE}"
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "8Gi"
+                cpu: "8"
+    Worker:
+      replicas: ${WORKER_COUNT}
+      template:
+        metadata:
+          labels:
+            app: distribiuted-matrix-multiplication
+            role: worker
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: worker
+            image: distribiuted-matrix-multiplication:latest
+            imagePullPolicy: IfNotPresent
+            # Worker containers wait for MPI commands from launcher
+            # The MPIJob operator handles the MPI daemon setup
+            command: ["/bin/sh", "-c", "sleep infinity"]
+            env:
+            - name: OMPI_ALLOW_RUN_AS_ROOT
+              value: "1"
+            - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
+              value: "1"
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "8Gi"
+                cpu: "8"

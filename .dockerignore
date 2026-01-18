@@ -1,0 +1,14 @@
+target/
+.git/
+.gitignore
+*.md
+.env
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+k8s/
+.pre-commit-config.yaml
+

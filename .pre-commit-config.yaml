@@ -1,0 +1,34 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        args: ['--all', '--', '--edition', '2021']
+      - id: clippy
+        args: ['--', '-D', 'warnings']
+      - id: cargo-check
+      - id: cargo-test
+
+  - repo: local
+    hooks:
+      - id: cargo-audit
+        name: cargo-audit
+        entry: cargo audit
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: ['--deny', 'warnings']
+
