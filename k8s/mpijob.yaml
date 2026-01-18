@@ -62,6 +62,7 @@ spec:
                   --hostfile /etc/mpi/hostfile \
                   --mca btl_vader_single_copy_mechanism none \
                   --mca btl ^openib \
+                  --mca routed=direct \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               else
@@ -71,6 +72,7 @@ spec:
                   --allow-run-as-root \
                   --mca btl_vader_single_copy_mechanism none \
                   --mca btl ^openib \
+                  --mca routed=direct \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               fi
