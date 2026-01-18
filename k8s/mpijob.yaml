@@ -106,11 +106,11 @@ spec:
               value: "${MATRIX_SIZE}"
             resources:
               requests:
-                memory: "512Mi"
-                cpu: "500m"
+                memory: "256Mi"
+                cpu: "200m"
               limits:
-                memory: "8Gi"
-                cpu: "8"
+                memory: "4Gi"
+                cpu: "4"
     Worker:
       replicas: ${WORKER_COUNT}
       template:
@@ -134,8 +134,8 @@ spec:
               value: "1"
             resources:
               requests:
-                memory: "512Mi"
-                cpu: "500m"
+                memory: "256Mi"
+                cpu: "100m"
               limits:
-                memory: "8Gi"
-                cpu: "8"
+                memory: "4Gi"
+                cpu: "4"

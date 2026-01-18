@@ -16,12 +16,49 @@ fi
 echo "MPI Operator found ✓"
 
 echo ""
-echo "2. Running MPIJob..."
-kubectl delete mpijob matrix-multiplication-mpijob --ignore-not-found=true
-sed "s/\${WORKER_COUNT}/${WORKER_COUNT}/g; s/\${MATRIX_SIZE}/${MATRIX_SIZE}/g" k8s/mpijob.yaml | kubectl apply -f -
+echo "2. Checking Docker image availability..."
+# Try to detect if we're using Minikube
+if command -v minikube &> /dev/null && minikube status &> /dev/null; then
+    echo "Minikube detected, checking image in Minikube..."
+    eval $(minikube docker-env)
+    if ! docker images | grep -q "distribiuted-matrix-multiplication.*latest"; then
+        echo "WARNING: Image distribiuted-matrix-multiplication:latest not found in Minikube!"
+        echo "Building image..."
+        docker build -t distribiuted-matrix-multiplication:latest . || {
+            echo "ERROR: Failed to build Docker image"
+            exit 1
+        }
+    else
+        echo "Image found in Minikube ✓"
+    fi
+else
+    echo "Checking if image exists locally..."
+    if ! docker images | grep -q "distribiuted-matrix-multiplication.*latest"; then
+        echo "WARNING: Image distribiuted-matrix-multiplication:latest not found locally!"
+        echo "You may need to build it: docker build -t distribiuted-matrix-multiplication:latest ."
+    else
+        echo "Image found locally ✓"
+    fi
+fi
 
 echo ""
-echo "3. Waiting for pods to be created..."
+echo "3. Creating MPIJob..."
+kubectl delete mpijob matrix-multiplication-mpijob --ignore-not-found=true
+
+# Create temporary file with substituted values
+TMP_FILE=$(mktemp)
+sed "s/\${WORKER_COUNT}/${WORKER_COUNT}/g; s/\${MATRIX_SIZE}/${MATRIX_SIZE}/g" k8s/mpijob.yaml > "$TMP_FILE"
+
+echo "Applied MPIJob configuration:"
+echo "  WORKER_COUNT: $WORKER_COUNT"
+echo "  MATRIX_SIZE: $MATRIX_SIZE"
+echo ""
+
+kubectl apply -f "$TMP_FILE"
+rm "$TMP_FILE"
+
+echo ""
+echo "4. Waiting for pods to be created..."
 sleep 10
 
 # Wait for pods to be created and show their status
@@ -69,7 +106,7 @@ for i in {1..20}; do
 done
 
 echo ""
-echo "4. Waiting for MPIJob to complete (timeout: 600s)..."
+echo "5. Waiting for MPIJob to complete (timeout: 600s)..."
 if ! kubectl wait --for=condition=complete mpijob/matrix-multiplication-mpijob --timeout=600s 2>&1; then
     echo ""
     echo "=== MPIJob TIMEOUT or FAILED ==="
@@ -118,7 +155,7 @@ if ! kubectl wait --for=condition=complete mpijob/matrix-multiplication-mpijob -
 fi
 
 echo ""
-echo "5. Checking results..."
+echo "6. Checking results..."
 LAUNCHER_POD=$(kubectl get pods -l role=launcher,app=distribiuted-matrix-multiplication -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [ -n "$LAUNCHER_POD" ]; then
     LOGS=$(kubectl logs "$LAUNCHER_POD" 2>&1)
