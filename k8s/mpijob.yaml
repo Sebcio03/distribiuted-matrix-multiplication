@@ -55,6 +55,13 @@ spec:
               
               # MPIJob operator provides hostfile at /etc/mpi/hostfile
               # Use mpirun with the hostfile to launch processes across pods
+              # Detect pod network interface (usually eth0 in Kubernetes)
+              POD_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+              if [ -z "$POD_INTERFACE" ]; then
+                POD_INTERFACE="eth0"
+              fi
+              echo "Using pod network interface: $POD_INTERFACE"
+              
               if [ -f /etc/mpi/hostfile ]; then
                 echo "Using MPIJob operator hostfile: /etc/mpi/hostfile"
                 mpirun -np $TOTAL_PROCS \
@@ -62,8 +69,13 @@ spec:
                   --hostfile /etc/mpi/hostfile \
                   --mca btl_vader_single_copy_mechanism none \
                   --mca routed=direct \
-                  --mca oob=ud \
+                  --mca oob=tcp \
+                  --mca oob_tcp_if_include "$POD_INTERFACE" \
                   --mca btl=^openib,self,tcp \
+                  --mca btl_tcp_if_include "$POD_INTERFACE" \
+                  --mca btl_tcp_if_exclude "lo,docker0" \
+                  --mca btl_tcp_port_min_v4 20000 \
+                  --mca btl_tcp_port_max_v4 30000 \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               else
@@ -73,8 +85,13 @@ spec:
                   --allow-run-as-root \
                   --mca btl_vader_single_copy_mechanism none \
                   --mca routed=direct \
-                  --mca oob=ud \
+                  --mca oob=tcp \
+                  --mca oob_tcp_if_include "$POD_INTERFACE" \
                   --mca btl=^openib,self,tcp \
+                  --mca btl_tcp_if_include "$POD_INTERFACE" \
+                  --mca btl_tcp_if_exclude "lo,docker0" \
+                  --mca btl_tcp_port_min_v4 20000 \
+                  --mca btl_tcp_port_max_v4 30000 \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               fi
@@ -106,6 +123,16 @@ spec:
               value: "1"
             - name: OMPI_MCA_routed
               value: "direct"
+            - name: OMPI_MCA_oob
+              value: "tcp"
+            - name: OMPI_MCA_btl
+              value: "^openib,self,tcp"
+            - name: OMPI_MCA_btl_tcp_if_exclude
+              value: "lo,docker0"
+            - name: OMPI_MCA_btl_tcp_port_min_v4
+              value: "20000"
+            - name: OMPI_MCA_btl_tcp_port_max_v4
+              value: "30000"
             - name: WORKER_COUNT
               value: "${WORKER_COUNT}"
             - name: MATRIX_SIZE
@@ -140,6 +167,16 @@ spec:
               value: "1"
             - name: OMPI_MCA_routed
               value: "direct"
+            - name: OMPI_MCA_oob
+              value: "tcp"
+            - name: OMPI_MCA_btl
+              value: "^openib,self,tcp"
+            - name: OMPI_MCA_btl_tcp_if_exclude
+              value: "lo,docker0"
+            - name: OMPI_MCA_btl_tcp_port_min_v4
+              value: "20000"
+            - name: OMPI_MCA_btl_tcp_port_max_v4
+              value: "30000"
             resources:
               requests:
                 memory: "256Mi"
