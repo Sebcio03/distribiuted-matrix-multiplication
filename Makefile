@@ -1,4 +1,4 @@
-.PHONY: help build run test fmt lint audit deny clean docker-build docker-run k8s-e2e-test k8s-check-mpi-operator k8s-install-mpi-operator
+.PHONY: help build run test fmt lint audit deny clean docker-build docker-run k8s-deploy-coordinator k8s-deploy-workers k8s-e2e-test
 
 help:
 	@echo 'Usage: make [target]'
@@ -41,23 +41,6 @@ generate-matrices: ## Generate test matrices (usage: make generate-matrices SIZE
 
 verify-multiplication: ## Verify matrix multiplication result (usage: make verify-multiplication MATRIX_A=matrix_a.txt MATRIX_B=matrix_b.txt RESULT=output.txt TOLERANCE=1e-5)
 	python3 scripts/verify_multiplication.py $(if $(MATRIX_A),$(MATRIX_A),matrix_a.txt) $(if $(MATRIX_B),$(MATRIX_B),matrix_b.txt) $(if $(RESULT),$(RESULT),output.txt) $(if $(TOLERANCE),$(TOLERANCE),)
-
-k8s-check-mpi-operator: ## Check if Kubeflow MPI Operator is installed
-	@if kubectl get crd mpijobs.kubeflow.org >/dev/null 2>&1; then \
-		echo "✓ Kubeflow MPI Operator is installed"; \
-		kubectl get crd mpijobs.kubeflow.org; \
-	else \
-		echo "✗ Kubeflow MPI Operator is NOT installed"; \
-		echo "  Install it with: make k8s-install-mpi-operator"; \
-		exit 1; \
-	fi
-
-k8s-install-mpi-operator: ## Install Kubeflow MPI Operator
-	@echo "Installing Kubeflow MPI Operator..."
-	kubectl apply --server-side -f https://raw.githubusercontent.com/kubeflow/mpi-operator/v0.7.0/deploy/v2beta1/mpi-operator.yaml
-	@echo "Waiting for MPI Operator to be ready..."
-	@kubectl wait --for=condition=available deployment/mpi-operator -n mpi-operator --timeout=120s || true
-	@echo "✓ MPI Operator installation complete"
 
 k8s-e2e-test: ## End-to-end test (usage: make k8s-e2e-test WORKERS=4 MATRIX_SIZE=100)
 	./scripts/e2e_test.sh $(if $(WORKERS),$(WORKERS),4) $(if $(MATRIX_SIZE),$(MATRIX_SIZE),100)
