@@ -61,8 +61,9 @@ spec:
                   --allow-run-as-root \
                   --hostfile /etc/mpi/hostfile \
                   --mca btl_vader_single_copy_mechanism none \
-                  --mca btl ^openib \
                   --mca routed=direct \
+                  --mca oob=ud \
+                  --mca btl=^openib,self,tcp \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               else
@@ -71,8 +72,9 @@ spec:
                 mpirun -np $TOTAL_PROCS \
                   --allow-run-as-root \
                   --mca btl_vader_single_copy_mechanism none \
-                  --mca btl ^openib \
                   --mca routed=direct \
+                  --mca oob=ud \
+                  --mca btl=^openib,self,tcp \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               fi
@@ -102,6 +104,8 @@ spec:
               value: "1"
             - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
               value: "1"
+            - name: OMPI_MCA_routed
+              value: "direct"
             - name: WORKER_COUNT
               value: "${WORKER_COUNT}"
             - name: MATRIX_SIZE
@@ -134,6 +138,8 @@ spec:
               value: "1"
             - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
               value: "1"
+            - name: OMPI_MCA_routed
+              value: "direct"
             resources:
               requests:
                 memory: "256Mi"
