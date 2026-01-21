@@ -1,25 +1,16 @@
-# Przewodnik instalacji Ubuntu - Rozproszone mnożenie macierzy
+# Przewodnik instalacji
 
-Ten przewodnik pomoże Ci skonfigurować świeżą instalację Ubuntu do uruchomienia projektu rozproszonego mnożenia macierzy z Kubernetes i MPI.
+Ten przewodnik pomoże skonfigurować świeżą instalację Ubuntu do uruchomienia projektu rozproszonego mnożenia macierzy z Kubernetes i MPI. Zostal przetestowany za pomocą AWS EC2 t2.large
 
 ## Wymagania wstępne
 
-- Świeża instalacja Ubuntu 20.04 lub nowsza
+- Świeża instalacja Ubuntu 24.04 lub nowsza
 - Połączenie z internetem
 - Dostęp sudo/root
-- **RAM**: 
-  - **Minimum 4GB** - działa z k3s lub zoptymalizowanym Minikube/Kind
-  - **Zalecane 8GB+** - dla wygodniejszej pracy z Minikube/Kind
-- Minimum 20GB wolnego miejsca na dysku
+- **RAM**: Zalecane 8GB+
+- Minimum 30GB wolnego miejsca na dysku
 
-### Uwaga dotycząca pamięci RAM
 
-**Tak, Kubernetes zadziała na 4GB RAM**, ale z pewnymi ograniczeniami:
-- **k3s** - najlepsza opcja dla 4GB (używa ~200-300MB)
-- **Minikube** - możliwe, ale wymaga zmniejszenia przydziału pamięci (2GB zamiast 4GB)
-- **Kind** - możliwe, ale będzie ciasno (zalecane minimum 4GB tylko dla klastra)
-
-Dla systemu z 4GB RAM zalecamy **k3s** lub **Minikube z ograniczoną pamięcią**.
 
 ## Krok 1: Aktualizacja systemu
 
@@ -218,8 +209,6 @@ python3 -c "import numpy; print('NumPy:', numpy.__version__)"
 # Sprawdzenie Kubernetes
 kubectl version --client
 kubectl cluster-info
-
-# Sprawdzenie MPI Operator
 kubectl get crd mpijobs.kubeflow.org
 ```
 
@@ -228,16 +217,10 @@ kubectl get crd mpijobs.kubeflow.org
 make build
 ```
 
-### 10.3 Uruchomienie testu E2E
+### 11 Test programu
+
+Przygotowany test E2E demonstruje pełny łańcuch działania aplikacji od przygotowania zasobów w Kubernetes, przez uruchomienie zadania, aż po zapis i odczyt wyniku.
 
 ```bash
-make k8s-e2e-test WORKERS=4 MATRIX_SIZE=100
+make k8s-e2e-test WORKER_COUNT=2 MATRIX_SIZE=100
 ```
-
-## Podsumowanie wymagań systemowych
-
-- **OS**: Ubuntu 24.04
-- **RAM**: 8GB
-- **CPU**: 2+ rdzenie zalecane
-- **Dysk**: 20GB+ wolnego miejsca
-- **Sieć**: Połączenie z internetem do pobierania

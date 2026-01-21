@@ -10,4 +10,4 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: standard  # Adjust based on your cluster's storage class
+  storageClassName: standard

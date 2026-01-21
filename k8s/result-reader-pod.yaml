@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: matrix-result-reader
+  labels:
+    app: distribiuted-matrix-multiplication
+    role: result-reader
+spec:
+  restartPolicy: Never
+  containers:
+  - name: matrix-result-reader
+    image: distribiuted-matrix-multiplication:latest
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh", "-c", "sleep 3600"]
+    volumeMounts:
+    - name: matrix-output
+      mountPath: /result-data
+  volumes:
+  - name: matrix-output
+    persistentVolumeClaim:
+      claimName: matrix-storage

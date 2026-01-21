@@ -2,8 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - mpi-env-configmap.yaml      # ConfigMap with MPI environment variables
-  - mpijob.yaml                 # MPIJob to run MPI multiplication across pods
+  - mpi-env-configmap.yaml
+  - mpijob.yaml
 
 commonLabels:
   app: distribiuted-matrix-multiplication

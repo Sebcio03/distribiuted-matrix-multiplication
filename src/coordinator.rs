@@ -66,10 +66,6 @@ impl<C: Communicator> Coordinator<C> {
         let rows_per_worker = (matrix_a.rows + actual_worker_count - 1) / actual_worker_count;
 
         println!(
-            "[Coordinator] Starting with {} workers (total processes: {})",
-            actual_worker_count, total_size
-        );
-        println!(
             "[Coordinator] Distributing work: {} rows per worker (row-based decomposition)",
             rows_per_worker
         );

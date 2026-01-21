@@ -1,4 +1,4 @@
-apiVersion: kubeflow.org/v2beta1
+ papiVersion: kubeflow.org/v2beta1
 kind: MPIJob
 metadata:
   name: matrix-multiplication-mpijob
@@ -31,84 +31,47 @@ spec:
               set -e
               WORKER_COUNT=${WORKER_COUNT:-4}
               
-              # Validate WORKER_COUNT
+              # Sprawdzenie WORKER_COUNT
               if [ "$WORKER_COUNT" -lt 1 ]; then
-                echo "ERROR: WORKER_COUNT must be >= 1, got: $WORKER_COUNT"
+                echo "BŁĄD: WORKER_COUNT musi być >= 1, otrzymano: $WORKER_COUNT"
                 exit 1
               fi
               
-              # Matrices are mounted from ConfigMap
+              if [ ! -s /etc/mpi/hostfile ]; then
+                echo "BŁĄD: /etc/mpi/hostfile nie istnieje lub jest pusty"
+                exit 1
+              fi
+
               MATRIX_A=/matrix-data/matrix_a.txt
               MATRIX_B=/matrix-data/matrix_b.txt
               OUTPUT=/result-data/output.txt
-              
-              echo "[Launcher] Matrices are ready; starting MPI job."
-              echo "[Launcher] Matrix files:"
-              ls -lah "$MATRIX_A" "$MATRIX_B" || true
-              if ! wc -c "$MATRIX_A" "$MATRIX_B"; then
-                echo "[Launcher] ERROR: Matrix files not readable"
-                exit 1
-              fi
-              
               TOTAL_PROCS=$((WORKER_COUNT + 1))
-              echo "Running MPI with $TOTAL_PROCS processes (1 coordinator + $WORKER_COUNT workers)..."
-              
-              # Setup MPI MCA parameters
-              export OMPI_MCA_routed=direct
-              export OMPI_MCA_oob=tcp
-              export OMPI_MCA_btl="^openib"
-              export OMPI_MCA_plm_rsh_args="-o ConnectionAttempts=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-              
-              # Detect pod network interface (fallback to eth0 if ip is missing)
               POD_INTERFACE="eth0"
-              if command -v ip >/dev/null 2>&1; then
-                DETECTED_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1 || true)
-                if [ -n "$DETECTED_INTERFACE" ]; then
-                  POD_INTERFACE="$DETECTED_INTERFACE"
-                fi
-              fi
-              
-              # Run MPI job
-              if [ -f /etc/mpi/hostfile ]; then
-                ORDERED_HOSTFILE=/tmp/hostfile-ordered
-                LAUNCHER_HOST=$(hostname)
-                echo "[Launcher] Hostfile contents:"
-                cat /etc/mpi/hostfile || true
-                echo "[Launcher] Hostname: ${LAUNCHER_HOST}"
-                echo "${LAUNCHER_HOST} slots=1" > "$ORDERED_HOSTFILE"
-                cat /etc/mpi/hostfile >> "$ORDERED_HOSTFILE"
+              ORDERED_HOSTFILE=/tmp/hostfile-ordered
+              LAUNCHER_HOST=$(hostname)
+              cat /etc/mpi/hostfile
+              echo "[Launcher] Nazwa hosta: ${LAUNCHER_HOST}"
+              echo "${LAUNCHER_HOST} slots=1" > "$ORDERED_HOSTFILE"
+              cat /etc/mpi/hostfile >> "$ORDERED_HOSTFILE"
 
-                mpirun -np $TOTAL_PROCS \
-                  --allow-run-as-root \
-                  --oversubscribe \
-                  --hostfile "$ORDERED_HOSTFILE" \
-                  --mca orte_base_help_aggregate 0 \
-                  --mca btl_vader_single_copy_mechanism none \
-                  --mca routed direct \
-                  --mca oob tcp \
-                  --mca btl "^openib" \
-                  --mca btl_tcp_port_min_v4 20000 \
-                  --mca btl_tcp_port_max_v4 30000 \
-                  -x OMPI_MCA_routed=direct \
-                  -x OMPI_MCA_oob=tcp \
-                  /app/distribiuted-matrix-multiplication \
-                  "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
-              else
-                mpirun -np $TOTAL_PROCS \
-                  --allow-run-as-root \
-                  --oversubscribe \
-                  --mca orte_base_help_aggregate 0 \
-                  --mca btl_vader_single_copy_mechanism none \
-                  --mca routed direct \
-                  --mca oob tcp \
-                  --mca btl "^openib" \
-                  --mca btl_tcp_port_min_v4 20000 \
-                  --mca btl_tcp_port_max_v4 30000 \
-                  /app/distribiuted-matrix-multiplication \
-                  "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
-              fi
+              mpirun -np $TOTAL_PROCS \
+                --allow-run-as-root \
+                --oversubscribe \
+                --hostfile "$ORDERED_HOSTFILE" \
+                --mca orte_base_help_aggregate 0 \
+                --mca plm_rsh_args "-o ConnectionAttempts=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+                --mca btl_vader_single_copy_mechanism none \
+                --mca routed direct \
+                --mca oob tcp \
+                --mca btl "^openib" \
+                --mca btl_tcp_port_min_v4 20000 \
+                --mca btl_tcp_port_max_v4 30000 \
+                -x OMPI_MCA_routed=direct \
+                -x OMPI_MCA_oob=tcp \
+                /app/distribiuted-matrix-multiplication \
+                "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               
-              echo "MPI completed. Output saved to $OUTPUT"
+              echo "MPI zakończone. Wynik zapisany do $OUTPUT"
             envFrom:
             - configMapRef:
                 name: mpi-env-config
@@ -148,7 +111,6 @@ spec:
           - name: worker
             image: distribiuted-matrix-multiplication:latest
             imagePullPolicy: IfNotPresent
-            # Worker containers run sshd for MPI
             command: ["/bin/sh", "-c", "/usr/sbin/sshd -D"]
             envFrom:
             - configMapRef:
@@ -159,4 +121,4 @@ spec:
                 cpu: "100m"
               limits:
                 memory: "4Gi"
-                cpu: "4"
+                cpu: "1"
