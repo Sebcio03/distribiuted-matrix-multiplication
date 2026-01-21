@@ -219,7 +219,19 @@ make build
 
 ### 11 Test programu
 
-Przygotowany test E2E demonstruje pełny łańcuch działania aplikacji od przygotowania zasobów w Kubernetes, przez uruchomienie zadania, aż po zapis i odczyt wyniku.
+Przygotowany test E2E demonstruje pełny łańcuch działania aplikacji:
+
+- Budowa obrazu Dockera: buduje obraz aplikacji distribiuted-matrix-multiplication:latest.
+- Generowanie danych wejściowych: lokalnie tworzy dwie macierze A i B o rozmiarze MATRIX_SIZE × MATRIX_SIZE.
+- Przygotowanie zasobów K8s:
+  - aplikuje ConfigMap z ustawieniami MPI,
+  - tworzy ConfigMap z plikami macierzy A i B,
+  - aplikuje PVC na wynik i czeka aż zostanie zbindowany,
+  - aplikuje MPIJob z liczbą workerów WORKER_COUNT.
+- Uruchomienie i monitorowanie obliczeń: czeka na zakończenie MPIJob.
+- Pobranie wyniku: uruchamia tymczasowy pod czytający wynik, kopiuje output.txt z PVC do lokalnego pliku, a potem usuwa pod.
+- Weryfikacja poprawności: lokalnie sprawdza wynik mnożenia macierzy i kończy test statusem „zaliczony/niezaliczony”.
+
 
 ```bash
 make k8s-e2e-test WORKER_COUNT=2 MATRIX_SIZE=100

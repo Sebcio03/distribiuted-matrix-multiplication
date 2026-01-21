@@ -4,7 +4,6 @@ import os
 
 
 def generate_random_value(i, j):
-    # Use a deterministic hash function that doesn't depend on Python's hash randomization
     hash_val = ((i * 2654435761) ^ (j * 2246822519)) % 1000000
     return hash_val / 10000.0
 
@@ -50,11 +49,9 @@ def main():
     print(f"Matrix A: {output_a}")
     print(f"Matrix B: {output_b}")
     
-    # Generate matrix A
     print("Generating matrix A...")
     generate_matrix(size, output_a)
     
-    # Generate matrix B
     print("Generating matrix B...")
     generate_matrix(size, output_b)
     

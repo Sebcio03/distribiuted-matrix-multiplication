@@ -26,10 +26,8 @@ docker build -t distribiuted-matrix-multiplication:latest . || {
 echo ""
 echo ""
 echo "3. Generowanie macierzy lokalnie..."
-TMP_DIR=$(mktemp -d)
-MATRIX_A="${TMP_DIR}/matrix_a.txt"
-MATRIX_B="${TMP_DIR}/matrix_b.txt"
-trap 'rm -rf "${TMP_DIR}"; kubectl delete configmap matrix-data-config --ignore-not-found=true >/dev/null 2>&1 || true' EXIT
+MATRIX_A="./matrix_a.txt"
+MATRIX_B="./matrix_b.txt"
 
 echo "  Generowanie macierzy lokalnie..."
 make generate-matrices SIZE="${MATRIX_SIZE}" OUTPUT_A="${MATRIX_A}" OUTPUT_B="${MATRIX_B}"
