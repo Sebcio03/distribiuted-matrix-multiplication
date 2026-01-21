@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mpi-env-config
+  labels:
+    app: distribiuted-matrix-multiplication
+data:
+  OMPI_ALLOW_RUN_AS_ROOT: "1"
+  OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
+  OMPI_MCA_routed: "direct"
+  OMPI_MCA_oob: "tcp"
+  OMPI_MCA_btl: "^openib"
+  OMPI_MCA_btl_tcp_port_min_v4: "20000"
+  OMPI_MCA_btl_tcp_port_max_v4: "30000"
+  OMPI_MCA_plm_rsh_args: "-o ConnectionAttempts=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"

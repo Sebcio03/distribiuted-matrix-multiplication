@@ -48,6 +48,7 @@ RUN apt-get update && apt-get install -y \
     openmpi-bin \
     libopenmpi-dev \
     openssh-client \
+    openssh-server \
     python3 \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
@@ -59,13 +60,17 @@ RUN ls -lh /app/distribiuted-matrix-multiplication && \
     file /app/distribiuted-matrix-multiplication && \
     chmod +x /app/distribiuted-matrix-multiplication
 
-# Create SSH directory for MPI
+# Create SSH directory for MPI and generate host keys
 RUN mkdir -p /home/appuser/.ssh && \
-    chmod 700 /home/appuser/.ssh
+    chmod 700 /home/appuser/.ssh && \
+    mkdir -p /var/run/sshd && \
+    ssh-keygen -A && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config && \
+    echo "StrictModes no" >> /etc/ssh/sshd_config
 
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app /home/appuser
-
-USER appuser
 
 # Set MPI environment variables
 ENV OMPI_ALLOW_RUN_AS_ROOT=1

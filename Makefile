@@ -36,11 +36,11 @@ docker-build:
 docker-run: 
 	docker run --rm distribiuted-matrix-multiplication:latest
 
-generate-matrices: ## Generate test matrices (usage: make generate-matrices SIZE=1000 OUTPUT_A=matrix_a.txt OUTPUT_B=matrix_b.txt)
+generate-matrices:
 	python3 scripts/generate_matrices.py $(if $(SIZE),$(SIZE),) $(if $(OUTPUT_A),$(OUTPUT_A),matrix_a.txt) $(if $(OUTPUT_B),$(OUTPUT_B),matrix_b.txt)
 
-verify-multiplication: ## Verify matrix multiplication result (usage: make verify-multiplication MATRIX_A=matrix_a.txt MATRIX_B=matrix_b.txt RESULT=output.txt TOLERANCE=1e-5)
+verify-multiplication:
 	python3 scripts/verify_multiplication.py $(if $(MATRIX_A),$(MATRIX_A),matrix_a.txt) $(if $(MATRIX_B),$(MATRIX_B),matrix_b.txt) $(if $(RESULT),$(RESULT),output.txt) $(if $(TOLERANCE),$(TOLERANCE),)
 
-k8s-e2e-test: ## End-to-end test (usage: make k8s-e2e-test WORKERS=4 MATRIX_SIZE=100)
-	./scripts/e2e_test.sh $(if $(WORKERS),$(WORKERS),4) $(if $(MATRIX_SIZE),$(MATRIX_SIZE),100)
+k8s-e2e-test: ## End-to-end test (usage: make k8s-e2e-test WORKER_COUNT=4 MATRIX_SIZE=100)
+	./scripts/e2e_test.sh $(if $(WORKER_COUNT),$(WORKER_COUNT),4) $(if $(MATRIX_SIZE),$(MATRIX_SIZE),100)

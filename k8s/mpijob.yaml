@@ -5,9 +5,11 @@ metadata:
   labels:
     app: distribiuted-matrix-multiplication
 spec:
+  launcherCreationPolicy: WaitForWorkersReady
   slotsPerWorker: 1
+  runLauncherAsWorker: false
   runPolicy:
-    cleanPodPolicy: Running
+    cleanPodPolicy: None
   mpiReplicaSpecs:
     Launcher:
       replicas: 1
@@ -28,115 +30,97 @@ spec:
             - |
               set -e
               WORKER_COUNT=${WORKER_COUNT:-4}
-              MATRIX_SIZE=${MATRIX_SIZE:-100}
-              MATRIX_A=/tmp/matrix_a.txt
-              MATRIX_B=/tmp/matrix_b.txt
-              OUTPUT=/tmp/output.txt
-
-              echo "Generating ${MATRIX_SIZE}x${MATRIX_SIZE} matrices..."
-              python3 -c "
-              import numpy as np
-              size = $MATRIX_SIZE
-              np.random.seed(42)
-              A = np.random.rand(size, size).astype(np.float32) * 100
-              B = np.random.rand(size, size).astype(np.float32) * 100
-              np.savetxt('$MATRIX_A', A, fmt='%.6f')
-              np.savetxt('$MATRIX_B', B, fmt='%.6f')
-              print('Generated matrices')
-              " 2>/dev/null || {
-                echo "Python not available, using shell fallback..."
-                awk -v size=$MATRIX_SIZE 'BEGIN {for(i=1;i<=size;i++){for(j=1;j<=size;j++)printf "%.1f ", i+j; print ""}}' > $MATRIX_A
-                awk -v size=$MATRIX_SIZE 'BEGIN {for(i=1;i<=size;i++){for(j=1;j<=size;j++)printf "%.1f ", i*j; print ""}}' > $MATRIX_B
-              }
-
+              
+              # Validate WORKER_COUNT
+              if [ "$WORKER_COUNT" -lt 1 ]; then
+                echo "ERROR: WORKER_COUNT must be >= 1, got: $WORKER_COUNT"
+                exit 1
+              fi
+              
+              # Matrices are mounted from ConfigMap
+              MATRIX_A=/matrix-data/matrix_a.txt
+              MATRIX_B=/matrix-data/matrix_b.txt
+              OUTPUT=/result-data/output.txt
+              
+              echo "[Launcher] Matrices are ready; starting MPI job."
+              echo "[Launcher] Matrix files:"
+              ls -lah "$MATRIX_A" "$MATRIX_B" || true
+              if ! wc -c "$MATRIX_A" "$MATRIX_B"; then
+                echo "[Launcher] ERROR: Matrix files not readable"
+                exit 1
+              fi
+              
               TOTAL_PROCS=$((WORKER_COUNT + 1))
               echo "Running MPI with $TOTAL_PROCS processes (1 coordinator + $WORKER_COUNT workers)..."
-              echo "Launcher will coordinate MPI across worker pods"
               
-              # MPIJob operator provides hostfile at /etc/mpi/hostfile
-              # Use mpirun with the hostfile to launch processes across pods
-              # Detect pod network interface (usually eth0 in Kubernetes)
-              POD_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-              if [ -z "$POD_INTERFACE" ]; then
-                POD_INTERFACE="eth0"
+              # Setup MPI MCA parameters
+              export OMPI_MCA_routed=direct
+              export OMPI_MCA_oob=tcp
+              export OMPI_MCA_btl="^openib"
+              export OMPI_MCA_plm_rsh_args="-o ConnectionAttempts=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+              
+              # Detect pod network interface (fallback to eth0 if ip is missing)
+              POD_INTERFACE="eth0"
+              if command -v ip >/dev/null 2>&1; then
+                DETECTED_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1 || true)
+                if [ -n "$DETECTED_INTERFACE" ]; then
+                  POD_INTERFACE="$DETECTED_INTERFACE"
+                fi
               fi
-              echo "Using pod network interface: $POD_INTERFACE"
               
+              # Run MPI job
               if [ -f /etc/mpi/hostfile ]; then
-                echo "Using MPIJob operator hostfile: /etc/mpi/hostfile"
+                ORDERED_HOSTFILE=/tmp/hostfile-ordered
+                LAUNCHER_HOST=$(hostname)
+                echo "[Launcher] Hostfile contents:"
+                cat /etc/mpi/hostfile || true
+                echo "[Launcher] Hostname: ${LAUNCHER_HOST}"
+                echo "${LAUNCHER_HOST} slots=1" > "$ORDERED_HOSTFILE"
+                cat /etc/mpi/hostfile >> "$ORDERED_HOSTFILE"
+
                 mpirun -np $TOTAL_PROCS \
                   --allow-run-as-root \
-                  --hostfile /etc/mpi/hostfile \
+                  --oversubscribe \
+                  --hostfile "$ORDERED_HOSTFILE" \
+                  --mca orte_base_help_aggregate 0 \
                   --mca btl_vader_single_copy_mechanism none \
-                  --mca routed=direct \
-                  --mca oob=tcp \
-                  --mca oob_tcp_if_include "$POD_INTERFACE" \
-                  --mca btl=^openib,self,tcp \
-                  --mca btl_tcp_if_include "$POD_INTERFACE" \
-                  --mca btl_tcp_if_exclude "lo,docker0" \
+                  --mca routed direct \
+                  --mca oob tcp \
+                  --mca btl "^openib" \
                   --mca btl_tcp_port_min_v4 20000 \
                   --mca btl_tcp_port_max_v4 30000 \
+                  -x OMPI_MCA_routed=direct \
+                  -x OMPI_MCA_oob=tcp \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               else
-                # Fallback: MPIJob operator may use different mechanism
-                echo "Hostfile not found, using default MPI discovery"
                 mpirun -np $TOTAL_PROCS \
                   --allow-run-as-root \
+                  --oversubscribe \
+                  --mca orte_base_help_aggregate 0 \
                   --mca btl_vader_single_copy_mechanism none \
-                  --mca routed=direct \
-                  --mca oob=tcp \
-                  --mca oob_tcp_if_include "$POD_INTERFACE" \
-                  --mca btl=^openib,self,tcp \
-                  --mca btl_tcp_if_include "$POD_INTERFACE" \
-                  --mca btl_tcp_if_exclude "lo,docker0" \
+                  --mca routed direct \
+                  --mca oob tcp \
+                  --mca btl "^openib" \
                   --mca btl_tcp_port_min_v4 20000 \
                   --mca btl_tcp_port_max_v4 30000 \
                   /app/distribiuted-matrix-multiplication \
                   "$MATRIX_A" "$MATRIX_B" "$OUTPUT"
               fi
-
-              echo "MPI completed. Verifying result..."
-              python3 -c "
-              import numpy as np
-              A = np.loadtxt('$MATRIX_A', dtype=np.float64)
-              B = np.loadtxt('$MATRIX_B', dtype=np.float64)
-              result = np.loadtxt('$OUTPUT', dtype=np.float64)
-              expected = A @ B
-              diff = np.abs(result - expected)
-              max_diff = np.max(diff)
-              rel_diff = max_diff / np.max(np.abs(expected)) if np.max(np.abs(expected)) > 0 else 0
-              print(f'Max absolute difference: {max_diff}')
-              print(f'Max relative difference: {rel_diff}')
-              if rel_diff < 1e-10:
-                  print('VERIFICATION PASSED')
-              else:
-                  print('VERIFICATION FAILED')
-                  exit(1)
-              " 2>/dev/null || echo "Verification skipped (numpy not available)"
-
-              echo "Done! Output saved to $OUTPUT"
+              
+              echo "MPI completed. Output saved to $OUTPUT"
+            envFrom:
+            - configMapRef:
+                name: mpi-env-config
             env:
-            - name: OMPI_ALLOW_RUN_AS_ROOT
-              value: "1"
-            - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
-              value: "1"
-            - name: OMPI_MCA_routed
-              value: "direct"
-            - name: OMPI_MCA_oob
-              value: "tcp"
-            - name: OMPI_MCA_btl
-              value: "^openib,self,tcp"
-            - name: OMPI_MCA_btl_tcp_if_exclude
-              value: "lo,docker0"
-            - name: OMPI_MCA_btl_tcp_port_min_v4
-              value: "20000"
-            - name: OMPI_MCA_btl_tcp_port_max_v4
-              value: "30000"
             - name: WORKER_COUNT
               value: "${WORKER_COUNT}"
-            - name: MATRIX_SIZE
-              value: "${MATRIX_SIZE}"
+            volumeMounts:
+            - name: matrix-data
+              mountPath: /matrix-data
+              readOnly: true
+            - name: matrix-output
+              mountPath: /result-data
             resources:
               requests:
                 memory: "256Mi"
@@ -144,6 +128,13 @@ spec:
               limits:
                 memory: "4Gi"
                 cpu: "4"
+          volumes:
+          - name: matrix-data
+            configMap:
+              name: matrix-data-config
+          - name: matrix-output
+            persistentVolumeClaim:
+              claimName: matrix-storage
     Worker:
       replicas: ${WORKER_COUNT}
       template:
@@ -157,26 +148,11 @@ spec:
           - name: worker
             image: distribiuted-matrix-multiplication:latest
             imagePullPolicy: IfNotPresent
-            # Worker containers wait for MPI commands from launcher
-            # The MPIJob operator handles the MPI daemon setup
-            command: ["/bin/sh", "-c", "sleep infinity"]
-            env:
-            - name: OMPI_ALLOW_RUN_AS_ROOT
-              value: "1"
-            - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
-              value: "1"
-            - name: OMPI_MCA_routed
-              value: "direct"
-            - name: OMPI_MCA_oob
-              value: "tcp"
-            - name: OMPI_MCA_btl
-              value: "^openib,self,tcp"
-            - name: OMPI_MCA_btl_tcp_if_exclude
-              value: "lo,docker0"
-            - name: OMPI_MCA_btl_tcp_port_min_v4
-              value: "20000"
-            - name: OMPI_MCA_btl_tcp_port_max_v4
-              value: "30000"
+            # Worker containers run sshd for MPI
+            command: ["/bin/sh", "-c", "/usr/sbin/sshd -D"]
+            envFrom:
+            - configMapRef:
+                name: mpi-env-config
             resources:
               requests:
                 memory: "256Mi"

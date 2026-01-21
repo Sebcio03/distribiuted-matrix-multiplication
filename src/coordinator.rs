@@ -60,15 +60,15 @@ impl<C: Communicator> Coordinator<C> {
             matrix_a.rows, matrix_a.cols, matrix_b.rows, matrix_b.cols
         );
 
-        // Broadcast dimensions to all workers (for synchronization)
-        let (_a_rows, _a_cols) = broadcast_dimensions(&self.world, 0, matrix_a.rows, matrix_a.cols)?;
-        let (_b_rows, _b_cols) = broadcast_dimensions(&self.world, 0, matrix_b.rows, matrix_b.cols)?;
-
         // Distribute work: split A by rows (1D row decomposition)
         // Each worker gets: rows [r1, r2) of A and the ENTIRE matrix B
         // Worker computes: result[r1:r2, :] = A[r1:r2, :] * B
         let rows_per_worker = (matrix_a.rows + actual_worker_count - 1) / actual_worker_count;
 
+        println!(
+            "[Coordinator] Starting with {} workers (total processes: {})",
+            actual_worker_count, total_size
+        );
         println!(
             "[Coordinator] Distributing work: {} rows per worker (row-based decomposition)",
             rows_per_worker
