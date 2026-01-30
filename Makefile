@@ -6,28 +6,28 @@ help:
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build the project
+build:
 	cargo build --release
 
-run: ## Run the application
+run:
 	cargo run
 
-test: ## Run tests
+test:
 	cargo test
 
-fmt: ## Format code
+fmt:
 	cargo fmt --all
 
-lint: ## Run clippy
+lint:
 	cargo clippy -- -D warnings
 
 audit:
 	cargo audit
 
-deny: 
+deny:
 	cargo deny check
 
-clean: 
+clean:
 	cargo clean
 
 docker-build: 
@@ -42,5 +42,5 @@ generate-matrices:
 verify-multiplication:
 	python3 scripts/verify_multiplication.py $(if $(MATRIX_A),$(MATRIX_A),matrix_a.txt) $(if $(MATRIX_B),$(MATRIX_B),matrix_b.txt) $(if $(RESULT),$(RESULT),output.txt) $(if $(TOLERANCE),$(TOLERANCE),)
 
-k8s-e2e-test: ## End-to-end test (usage: make k8s-e2e-test WORKER_COUNT=4 MATRIX_SIZE=100)
-	./scripts/e2e_test.sh $(if $(WORKER_COUNT),$(WORKER_COUNT),4) $(if $(MATRIX_SIZE),$(MATRIX_SIZE),100)
+k8s-e2e-test:
+   ./scripts/e2e_test.sh $(if $(WORKER_COUNT),$(WORKER_COUNT),4) $(if $(MATRIX_SIZE),$(MATRIX_SIZE),100)
